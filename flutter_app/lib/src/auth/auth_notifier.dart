@@ -6,16 +6,18 @@ import '../data/providers/api_client.dart';
 import 'auth_state.dart';
 
 class AuthNotifier extends Notifier<AuthState> {
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  late final Future<void> _initFuture;
+
   @override
   AuthState build() {
-    _init();
+    _initFuture = _init();
     return const AuthState.initial();
   }
 
   Future<void> _init() async {
-    const storage = FlutterSecureStorage();
     try {
-      final token = await storage.read(key: 'auth_token');
+      final token = await _storage.read(key: 'auth_token');
       if (token != null && token.isNotEmpty) {
         state = AuthState.authenticated(token);
         return;
@@ -25,6 +27,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> login(String email, String password) async {
+    await _initFuture;
     state = const AuthState.loading();
 
     try {
@@ -39,8 +42,7 @@ class AuthNotifier extends Notifier<AuthState> {
         return;
       }
 
-      const storage = FlutterSecureStorage();
-      await storage.write(key: 'auth_token', value: token);
+      await _storage.write(key: 'auth_token', value: token);
       state = AuthState.authenticated(token);
     } on DioException catch (e) {
       final message = e.response?.data?['message'] as String? ??
@@ -53,8 +55,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
-    const storage = FlutterSecureStorage();
-    await storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'auth_token');
     state = const AuthState.unauthenticated();
   }
 }
