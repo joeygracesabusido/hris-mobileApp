@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'src/auth/auth_provider.dart';
 import 'src/auth/auth_state.dart';
 import 'src/auth/login_screen.dart';
+import 'src/ui/screens/dashboard_screen.dart';
 import 'src/ui/screens/employee_list_screen.dart';
 import 'src/ui/widgets/app_theme.dart';
 
@@ -44,16 +45,21 @@ class _AppWithRouter extends ConsumerWidget {
       initialLocation: '/',
       redirect: (context, state) {
         final isLoginRoute = state.matchedLocation == '/login';
+        final isRootRoute = state.matchedLocation == '/';
 
         if (authState.status == AuthStatus.initial) return null;
-        if (!authState.isAuthenticated && !isLoginRoute) return '/login';
-        if (authState.isAuthenticated && isLoginRoute) return '/employees';
+        if (!authState.isAuthenticated) return isLoginRoute ? null : '/login';
+        if (authState.isAuthenticated && (isLoginRoute || isRootRoute)) return '/dashboard';
         return null;
       },
       routes: [
         GoRoute(
           path: '/login',
           builder: (context, state) => const LoginScreen(),
+        ),
+        GoRoute(
+          path: '/dashboard',
+          builder: (context, state) => const DashboardScreen(),
         ),
         GoRoute(
           path: '/employees',
