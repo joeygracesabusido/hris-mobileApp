@@ -9,6 +9,8 @@ class ApiClient {
   late final Dio dio;
   final _secureStorage = const FlutterSecureStorage();
 
+  static ApiClient get instance => _instance;
+
   factory ApiClient() => _instance;
 
   ApiClient._internal() {
@@ -26,7 +28,7 @@ class ApiClient {
           options.headers[HttpHeaders.authorizationHeader] = 'Bearer $token';
         }
         return handler.next(options);
-      }, onError: (DioError e, handler) {
+      }, onError: (DioException e, handler) {
         // Centralized error handling
         return handler.next(e);
       }));
