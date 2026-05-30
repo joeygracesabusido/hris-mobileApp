@@ -7,6 +7,7 @@ import 'src/auth/auth_state.dart';
 import 'src/auth/login_screen.dart';
 import 'src/ui/screens/dashboard_screen.dart';
 import 'src/ui/screens/employee_list_screen.dart';
+import 'src/ui/screens/time_log_screen.dart';
 import 'src/ui/widgets/app_theme.dart';
 
 void main() async {
@@ -65,6 +66,10 @@ class _AppWithRouter extends ConsumerWidget {
           path: '/employees',
           builder: (context, state) => const EmployeeListScreen(),
         ),
+        GoRoute(
+          path: '/time-logs',
+          builder: (context, state) => const TimeLogScreen(),
+        ),
       ],
     );
 
@@ -73,6 +78,7 @@ class _AppWithRouter extends ConsumerWidget {
       routerConfig: router,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
+      debugShowCheckedModeBanner: false,
     );
   }
 }

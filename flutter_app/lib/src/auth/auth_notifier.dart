@@ -47,11 +47,20 @@ class AuthNotifier extends Notifier<AuthState> {
     return const AuthState.initial();
   }
 
+  void _setAuthHeaders(Map<String, dynamic> user) {
+    ApiClient.authHeaders = {
+      'X-Auth-Id': user['id']?.toString() ?? '',
+      'X-Auth-Role': user['role']?.toString() ?? '',
+      'X-Auth-Email': user['email']?.toString() ?? '',
+    };
+  }
+
   Future<void> _init() async {
     try {
       final userData = await _readSecure('user_data');
       if (userData != null && userData.isNotEmpty) {
         final user = jsonDecode(userData) as Map<String, dynamic>;
+        _setAuthHeaders(user);
         state = AuthState.authenticated(user);
         return;
       }
@@ -75,6 +84,7 @@ class AuthNotifier extends Notifier<AuthState> {
         return;
       }
 
+      _setAuthHeaders(user);
       await _writeSecure('user_data', jsonEncode(user));
       state = AuthState.authenticated(user);
     } on DioException catch (e) {
@@ -88,6 +98,7 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    ApiClient.authHeaders = null;
     await _deleteSecure('user_data');
     state = const AuthState.unauthenticated();
   }
