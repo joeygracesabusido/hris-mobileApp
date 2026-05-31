@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:camera/camera.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image/image.dart' as img;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'app_theme.dart';
 
@@ -67,8 +69,61 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
     if (_disposed) return;
 
     try {
-      final interpreter =
-          await Interpreter.fromAsset('ml/mobile_face_net.tflite');
+      // Step 1: Request camera permission (immediate user interaction)
+      _setStatus('Requesting camera permission...', null);
+      final cameraStatus = await Permission.camera.request()
+          .timeout(const Duration(seconds: 15));
+      if (!cameraStatus.isGranted) {
+        _setStatus('Camera permission denied', false);
+        return;
+      }
+
+      // Step 2: Find a camera
+      _setStatus('Opening camera...', null);
+      final cameras = await availableCameras()
+          .timeout(const Duration(seconds: 10));
+      if (cameras.isEmpty) {
+        _setStatus('No camera available', false);
+        return;
+      }
+
+      final frontCamera = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      // Step 3: Initialize camera (shows feed immediately)
+      _cameraController = CameraController(
+        frontCamera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
+      );
+
+      await _cameraController!.initialize()
+          .timeout(const Duration(seconds: 15));
+      if (!mounted || _disposed) return;
+
+      setState(() => _isInitialized = true);
+
+      // Step 4: Load ML model (in background, after camera feed is visible)
+      _setStatus('Loading face recognition model...', null);
+      final modelBytes = await rootBundle
+          .load('assets/ml/mobile_face_net.tflite')
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || _disposed) return;
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/mobile_face_net.tflite');
+      await tempFile.writeAsBytes(
+        modelBytes.buffer.asUint8List(
+          modelBytes.offsetInBytes,
+          modelBytes.lengthInBytes,
+        ),
+      );
+      if (!mounted || _disposed) return;
+      final interpreter = Interpreter.fromFile(tempFile);
       _interpreter = interpreter;
 
       _faceDetector = FaceDetector(
@@ -80,33 +135,10 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
         ),
       );
 
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) {
-        _setStatus('No camera available', false);
-        return;
-      }
-
-      final frontCamera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
-      );
-
-      _cameraController = CameraController(
-        frontCamera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-        imageFormatGroup: Platform.isAndroid
-            ? ImageFormatGroup.nv21
-            : ImageFormatGroup.bgra8888,
-      );
-
-      await _cameraController!.initialize();
-      if (!mounted || _disposed) return;
-
-      setState(() => _isInitialized = true);
       _setStatus('Center your face in the frame', null);
-
       await _startImageStream();
+    } on TimeoutException catch (_) {
+      _setStatus('Camera initialization timed out. Please try again.', false);
     } catch (e) {
       _setStatus('Initialization error: $e', false);
     }
@@ -522,18 +554,29 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
 
   Future<void> _retry() async {
     _failedAttempts = 0;
-    _setStatus('Center your face in the frame', null);
     _isProcessing = false;
-    await _startImageStream();
+    _isInitialized = false;
+    _setStatus('Initializing...', null);
+    await _disposeResources();
+    if (!mounted || _disposed) return;
+    await _initialize();
+  }
+
+  Future<void> _disposeResources() async {
+    _interpreter?.close();
+    _interpreter = null;
+    try {
+      _faceDetector.close();
+    } catch (_) {}
+    await _cameraController?.dispose();
+    _cameraController = null;
   }
 
   @override
   void dispose() {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.dispose();
-    _faceDetector.close();
-    _interpreter?.close();
+    _disposeResources();
     super.dispose();
   }
 
@@ -542,10 +585,47 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
     return Column(
       children: [
         if (!_isInitialized)
-          const Padding(
-            padding: EdgeInsets.all(32),
+          Padding(
+            padding: const EdgeInsets.all(32),
             child: Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_statusSuccess == false)
+                    const Icon(Icons.error_outline, color: Color(0xFFFF6B6B), size: 48)
+                  else
+                    const CircularProgressIndicator(color: AppTheme.primary),
+                  if (_statusMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _statusMessage!,
+                      style: TextStyle(
+                        color: _statusSuccess == false
+                            ? const Color(0xFFFF6B6B)
+                            : AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  if (_statusSuccess == false) ...[
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _retry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Try Again'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 14),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           )
         else ...[

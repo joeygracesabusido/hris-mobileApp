@@ -137,6 +137,64 @@ flutter test
 **Files modified:**
 - `flutter_app/lib/src/ui/widgets/face_capture_widget_mobile.dart` — `_buildInputImage` (:272-273), `_cameraImageToImg` (:411-416)
 
+### 2026-05-31 (v3) — Camera init timeout + loading UX overhaul
+
+**Problem:** Face verification screen showed a permanent loading spinner and never opened the camera on either platform.
+
+**Root cause:** Neither `CameraController.initialize()` nor `Permission.camera.request()` had timeouts. On Android, TFLite model (5.2MB) was loaded *before* camera permission — if loading was slow the permission dialog never appeared. On web, if the browser permission dialog was ignored, `getUserMedia` hung forever.
+
+**Done:**
+- **Reordered mobile init:** camera permission → camera init → show feed → *then* load TFLite model (user sees camera immediately)
+- **Added `.timeout(...)`** to every init step (15s permission, 10s camera list, 15s camera init, 30s TFLite)
+- **Progress messages** during loading ("Requesting camera permission...", "Opening camera...", "Loading face recognition model...")
+- **Error + Retry button** shown on any init failure (both platforms)
+- **Web:** Same timeout + error handling pattern
+- `flutter analyze` — no issues
+- `flutter build web` — builds successfully
+
+**Files modified:**
+- `face_capture_widget_mobile.dart` — reordered init, timeouts, `_retry()` resets + re-initializes all resources, status shown during loading
+- `face_capture_widget_web.dart` — timeouts, retry with full reinit, status shown during loading
+
+### 2026-05-31 (v2) — Camera permission fix + web build verification
+
+**Goal:** Fix camera not opening on Android (face verification) but clock-in still succeeding. Verify web (Edge) build.
+
+**Root cause:**
+1. **Mobile:** `FaceCaptureWidget` (`face_capture_widget_mobile.dart`) called `availableCameras()` and `CameraController.initialize()` **without requesting runtime camera permission**. On Android 13+, manifest declaration alone is insufficient — `permission_handler` runtime grant is required. Denied permission caused camera init to fail silently → widget hung on loading spinner → no face verification → but on web the simulation always succeeded.
+2. **Web:** `face_capture_widget_web.dart` is a simulation with no real camera. It always auto-succeeds with `matchDistance: 0.12` (below 0.6 threshold). This is intentional (ML Kit + TFLite don't support web), but the user testing on web saw "camera doesn't open, clock in happens."
+
+**Done:**
+- **Mobile:** Added `permission_handler` camera permission request (`Permission.camera.request()`) before `availableCameras()` in `face_capture_widget_mobile.dart:_initialize()`. If denied → widget shows "Camera permission denied" error and returns (no `onVerify` call → clock in blocked).
+- **Web:** Replaced fake simulation (`face_capture_widget_web.dart`) with real camera using `camera` package (`camera_web`). No more auto-bypass — user must grant camera permission AND manually tap "Capture" to take a selfie. If no camera available or permission denied → clock in is blocked.
+- Verified `flutter build web` succeeds with no compilation errors.
+- Verified `flutter analyze` — no issues.
+
+**Files modified:**
+- `flutter_app/lib/src/ui/widgets/face_capture_widget_mobile.dart` — added `permission_handler` import + `Permission.camera.request()` before camera init
+- `flutter_app/lib/src/ui/widgets/face_capture_widget_web.dart` — replaced fake simulation with `camera` package real camera feed + capture button
+
+### 2026-05-31 (v4) — TFLite model asset loading fix on SM-A075F
+
+**Problem:** "Initialization error: Unable to load asset" for `mobile_face_net.tflite` on Samsung SM-A075F.
+
+**Root cause:**
+1. **AAPT2 compression:** Android's build system compresses `.tflite` files by default. `tflite_flutter`'s `Interpreter.fromAsset()` uses memory-mapped loading which fails on compressed assets. Fixed with `aaptOptions { noCompress("tflite") }` in `build.gradle.kts`.
+2. **`Interpreter.fromAsset()` internal path resolution:** On certain devices (SM-A075F), `Interpreter.fromAsset()` fails to resolve the asset even when uncompressed. Replaced with manual `rootBundle.load()` → temp file → `Interpreter.fromFile()` to bypass the internal asset loading logic.
+
+**Done:**
+- Added `aaptOptions { noCompress("tflite") }` to `android/app/build.gradle.kts:17-19` — prevents Android AAPT2 compression of `.tflite` assets
+- Replaced `Interpreter.fromAsset('ml/mobile_face_net.tflite')` with `rootBundle.load('assets/ml/mobile_face_net.tflite')` → write to `Directory.systemTemp/mobile_face_net.tflite` → `Interpreter.fromFile()`
+- Added 20s timeouts on `rootBundle.load()` and the file write step
+- Cleaned up unused `dart:typed_data` import
+- Built debug APK and installed via adb
+
+**Testing status:** Fix applied, APK installed — pending clock-in test on SM-A075F.
+
+**Files modified:**
+- `flutter_app/android/app/build.gradle.kts` — added `aaptOptions { noCompress("tflite") }`
+- `flutter_app/lib/src/ui/widgets/face_capture_widget_mobile.dart` — replaced `Interpreter.fromAsset` with manual asset load + temp file + `Interpreter.fromFile`
+
 ## CI / lint
 
 - Lint rules via `package:flutter_lints/flutter.yaml` — no custom overrides.
