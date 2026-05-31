@@ -90,6 +90,53 @@ flutter test
 **Files modified (Backend — `hris-maam-jhoy/`):**
 - `lib/auth-helpers.ts`, `app/api/time-logs/route.ts`, `app/api/employees/route.ts`
 
+### 2026-05-31 — Attendance with Facial Recognition + GPS
+
+**Goal:** Add attendance feature with GPS geofence validation and on-device facial recognition.
+
+**Done:**
+- Added "Attendance" button on dashboard → navigates to `/attendance`
+- Created `AttendanceScreen` with GPS check (geolocator + Haversine vs OfficeLocation geofences)
+- Created `FaceCaptureWidget` — reusable camera + ML Kit face detection + TFLite MobileFaceNet embedding
+- Created `FaceEnrollScreen` — enroll face from mobile (stores 128-dim descriptor to backend)
+- On-device ML pipeline: `camera` → `google_mlkit_face_detection` → `tflite_flutter` (MobileFaceNet) → 128-dim embedding → Euclidean distance (< 0.6)
+- Backend office-location routes updated to support X-Auth headers for Flutter requests
+- GPS coords sent with clockIn/clockOut for server-side geofence validation
+- TFLite model bundled at `assets/ml/mobile_face_net.tflite` (~5.2MB)
+
+**New files (Flutter):**
+- `lib/src/data/providers/face_repository.dart` — face descriptor API
+- `lib/src/ui/widgets/face_capture_widget.dart` — camera + ML Kit + TFLite
+- `lib/src/ui/screens/attendance_screen.dart` — main attendance flow
+- `lib/src/ui/screens/face_enroll_screen.dart` — face enrollment
+
+**Modified files (Flutter):**
+- `pubspec.yaml` — added geolocator, camera, google_mlkit_face_detection, tflite_flutter, permission_handler, image
+- `lib/main.dart` — added `/attendance`, `/face-enroll` routes
+- `lib/src/ui/screens/dashboard_screen.dart` — Attendance button
+- `lib/src/data/providers/time_log_repository.dart` — GPS params on clockIn/clockOut
+- `android/app/src/main/AndroidManifest.xml` — CAMERA + LOCATION permissions
+
+**Modified files (Backend):**
+- `app/api/office-location/route.ts` — all methods use `getRequestSession()` for X-Auth header support
+
+### 2026-05-31 — Face verification fix on Samsung SM-A075F
+
+**Goal:** Fix face detection/verification pipeline on Samsung SM-A075F (Galaxy A07, MediaTek Helio P25).
+
+**Done:**
+- Fixed `_buildInputImage` bytesPerRow for multi-plane YUV_420_888 → NV21 conversion: Samsung camera HAL delivers YUV_420_888 even when NV21 is requested; `bytesPerRow` must be `image.width` (not the padded stride from the sensor) because `_yuv420ToNv21` produces a compact buffer.
+- Fixed `_cameraImageToImg` stride padding for native single-plane NV21: use `cameraImage.planes[0].bytesPerRow` as `yRowStride` instead of assuming `bytesPerRow == width`. SM-A075F delivers NV21 with stride padding, so the old `y * width + x` indexing read wrong memory after row 0.
+
+**Root cause (2 independent stride bugs):**
+1. ML Kit face detection input: compact NV21 + wrong bytesPerRow → ML Kit reads garbled rows → no face detected.
+2. TFLite embedding input: raw NV21 with stride padding + hardcoded width → wrong Y/UV positions → corrupted face crop → embedding always fails (> 0.6 threshold).
+
+**Important:** Face descriptors enrolled before this fix on SM-A075F must be re-enrolled (stored embeddings are garbled).
+
+**Files modified:**
+- `flutter_app/lib/src/ui/widgets/face_capture_widget_mobile.dart` — `_buildInputImage` (:272-273), `_cameraImageToImg` (:411-416)
+
 ## CI / lint
 
 - Lint rules via `package:flutter_lints/flutter.yaml` — no custom overrides.

@@ -299,6 +299,7 @@ class _QuickActionsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
+      _ActionItem(icon: Icons.fingerprint, label: 'Attendance', color: const Color(0xFF00D1B2)),
       _ActionItem(icon: Icons.person_add, label: 'Add Employee', color: const Color(0xFF00D1B2)),
       _ActionItem(icon: Icons.event, label: 'Manage Leaves', color: const Color(0xFF6C63FF)),
       _ActionItem(icon: Icons.attach_money, label: 'Payroll', color: const Color(0xFFFF6B6B)),
@@ -335,7 +336,9 @@ class _ActionButton extends StatelessWidget {
   const _ActionButton({required this.item});
 
   void _onTap(BuildContext context) {
-    if (item.label == 'Time Logs') {
+    if (item.label == 'Attendance') {
+      context.go('/attendance');
+    } else if (item.label == 'Time Logs') {
       context.go('/time-logs');
     }
   }

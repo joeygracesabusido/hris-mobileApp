@@ -1,0 +1,7 @@
+subprojects {
+    afterEvaluate { project ->
+        if (project.name == 'tflite_flutter') {
+            project.android.compileSdkVersion 36
+        }
+    }
+}

@@ -6,7 +6,7 @@ import '../../data/providers/employee_list_provider.dart';
 import '../widgets/app_theme.dart';
 
 class EmployeeListScreen extends ConsumerWidget {
-  const EmployeeListScreen({Key? key}) : super(key: key);
+  const EmployeeListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -55,18 +55,24 @@ class TimeLogRepository {
         .toList();
   }
 
-  Future<void> clockIn(String employeeId) async {
-    await _dio.post('/time-logs', data: {
+  Future<void> clockIn(String employeeId, {double? latitude, double? longitude}) async {
+    final data = <String, dynamic>{
       'employeeId': employeeId,
       'type': 'clockIn',
-    });
+    };
+    if (latitude != null) data['latitude'] = latitude;
+    if (longitude != null) data['longitude'] = longitude;
+    await _dio.post('/time-logs', data: data);
   }
 
-  Future<void> clockOut(String employeeId) async {
-    await _dio.post('/time-logs', data: {
+  Future<void> clockOut(String employeeId, {double? latitude, double? longitude}) async {
+    final data = <String, dynamic>{
       'employeeId': employeeId,
       'type': 'clockOut',
-    });
+    };
+    if (latitude != null) data['latitude'] = latitude;
+    if (longitude != null) data['longitude'] = longitude;
+    await _dio.post('/time-logs', data: data);
   }
 
   Future<void> delete(String id) async {
