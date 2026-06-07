@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../auth/auth_provider.dart';
+import '../../auth/role_guard.dart';
 import '../widgets/app_theme.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -10,6 +11,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
+    final guard = RoleGuard(authState);
     final user = authState.user;
     final name = user?['name'] as String? ?? user?['username'] as String? ?? 'User';
     final role = user?['role'] as String? ?? 'N/A';
@@ -26,33 +28,37 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                _QuickStatsRow(),
-                const SizedBox(height: 24),
+                if (guard.isAdmin) ...[
+                  _QuickStatsRow(),
+                  const SizedBox(height: 24),
+                ],
                 _SectionTitle(title: 'Quick Actions'),
                 const SizedBox(height: 12),
-                _QuickActionsGrid(),
+                _QuickActionsGrid(guard: guard),
                 const SizedBox(height: 24),
-                _SectionTitle(title: 'Recent Activity'),
-                const SizedBox(height: 12),
-                _ActivityTile(
-                  icon: Icons.person_add,
-                  title: 'New Employee Onboarded',
-                  subtitle: 'Juan dela Cruz joined as Software Engineer',
-                  time: '2 hours ago',
-                ),
-                _ActivityTile(
-                  icon: Icons.description,
-                  title: 'Leave Request Approved',
-                  subtitle: 'Maria Santos — Annual Leave (3 days)',
-                  time: '5 hours ago',
-                ),
-                _ActivityTile(
-                  icon: Icons.attach_money,
-                  title: 'Payroll Processed',
-                  subtitle: 'May 2026 payroll has been finalized',
-                  time: '1 day ago',
-                ),
-                const SizedBox(height: 32),
+                if (guard.isAdmin) ...[
+                  _SectionTitle(title: 'Recent Activity'),
+                  const SizedBox(height: 12),
+                  _ActivityTile(
+                    icon: Icons.person_add,
+                    title: 'New Employee Onboarded',
+                    subtitle: 'Juan dela Cruz joined as Software Engineer',
+                    time: '2 hours ago',
+                  ),
+                  _ActivityTile(
+                    icon: Icons.description,
+                    title: 'Leave Request Approved',
+                    subtitle: 'Maria Santos — Annual Leave (3 days)',
+                    time: '5 hours ago',
+                  ),
+                  _ActivityTile(
+                    icon: Icons.attach_money,
+                    title: 'Payroll Processed',
+                    subtitle: 'May 2026 payroll has been finalized',
+                    time: '1 day ago',
+                  ),
+                  const SizedBox(height: 32),
+                ],
               ]),
             ),
           ),
@@ -296,14 +302,20 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _QuickActionsGrid extends StatelessWidget {
+  final RoleGuard guard;
+  const _QuickActionsGrid({required this.guard});
+
   @override
   Widget build(BuildContext context) {
+    final isEmployee = guard.isEmployee;
     final actions = [
       _ActionItem(icon: Icons.fingerprint, label: 'Attendance', color: const Color(0xFF00D1B2)),
       _ActionItem(icon: Icons.fingerprint, label: 'Face Registration', color: const Color(0xFF6C63FF)),
-      _ActionItem(icon: Icons.person_add, label: 'Add Employee', color: const Color(0xFF00D1B2)),
-      _ActionItem(icon: Icons.event, label: 'Manage Leaves', color: const Color(0xFF6C63FF)),
-      _ActionItem(icon: Icons.attach_money, label: 'Payroll', color: const Color(0xFFFF6B6B)),
+      if (!isEmployee) ...[
+        _ActionItem(icon: Icons.person_add, label: 'Add Employee', color: const Color(0xFF00D1B2)),
+        _ActionItem(icon: Icons.event, label: 'Manage Leaves', color: const Color(0xFF6C63FF)),
+        _ActionItem(icon: Icons.attach_money, label: 'Payroll', color: const Color(0xFFFF6B6B)),
+      ],
       _ActionItem(icon: Icons.schedule, label: 'Time Logs', color: const Color(0xFFFFD93D)),
     ];
 
