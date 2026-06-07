@@ -359,6 +359,8 @@ class _ActionButton extends StatelessWidget {
       context.go('/time-logs');
     } else if (item.label == 'Face Registration') {
       context.go('/face-status');
+    } else if (item.label == 'Payroll') {
+      context.go('/payroll');
     }
   }
 

@@ -11,6 +11,8 @@ import 'src/ui/screens/time_log_screen.dart';
 import 'src/ui/screens/attendance_screen.dart';
 import 'src/ui/screens/face_enroll_screen.dart';
 import 'src/ui/screens/face_status_screen.dart';
+import 'src/ui/screens/payroll_screen.dart';
+import 'src/ui/screens/payroll_detail_screen.dart';
 import 'src/ui/widgets/app_theme.dart';
 
 void main() async {
@@ -84,6 +86,14 @@ class _AppWithRouter extends ConsumerWidget {
         GoRoute(
           path: '/face-status',
           builder: (context, state) => const FaceStatusScreen(),
+        ),
+        GoRoute(
+          path: '/payroll',
+          builder: (context, state) => const PayrollScreen(),
+        ),
+        GoRoute(
+          path: '/payroll/:id',
+          builder: (context, state) => PayrollDetailScreen(payrollId: state.pathParameters['id']!),
         ),
       ],
     );
