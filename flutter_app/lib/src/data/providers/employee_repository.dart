@@ -12,6 +12,28 @@ class EmployeeRepository {
     return data.map((e) => Employee.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<List<Employee>> getByEmployeeId(String employeeId) async {
+    final response = await _dio.get('/employees', queryParameters: {'employeeId': employeeId});
+    final dynamic rawData = response.data;
+
+    List<dynamic> data = [];
+    if (rawData is List) {
+      data = rawData;
+    } else if (rawData is Map) {
+      if (rawData['data'] is List) {
+        data = rawData['data'];
+      } else if (rawData['employees'] is List) {
+        data = rawData['employees'];
+      } else if (rawData['results'] is List) {
+        data = rawData['results'];
+      }
+    }
+
+    return data
+        .map((e) => Employee.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Employee> getById(String id) async {
     final response = await _dio.get('/employees/$id');
     return Employee.fromJson(response.data as Map<String, dynamic>);
