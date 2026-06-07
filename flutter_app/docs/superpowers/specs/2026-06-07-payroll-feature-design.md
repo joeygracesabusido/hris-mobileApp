@@ -109,9 +109,8 @@ class PayrollRepository {
 #### payrollListProvider.family
 
 ```dart
-final payrollListProvider = Family.autoDispose<List<PayrollRecord>, String?>(
-  (ref, employeeId) {
-    // This is a FutureProvider.family — returns cached data per employeeId key
+final payrollListProvider = FutureProvider.family.autoDispose<List<PayrollRecord>, String?>(
+  (ref, employeeId) async {
     final repository = ref.watch(payrollRepositoryProvider);
     return repository.getPayrolls(employeeId: employeeId);
   },
@@ -126,15 +125,17 @@ final payrollListProvider = Family.autoDispose<List<PayrollRecord>, String?>(
 #### processPayrollProvider
 
 ```dart
-final processPayrollProvider = StateNotifierProvider.autoDispose<ProcessPayrollNotifier, AsyncValue<PayrollRecord?>>(
+final processPayrollProvider = AsyncNotifierProvider.autoDispose<ProcessPayrollNotifier, PayrollRecord?>(
   (ref) => ProcessPayrollNotifier(
     ref.watch(payrollRepositoryProvider),
   ),
 );
 
-class ProcessPayrollNotifier extends StateNotifier<AsyncValue<PayrollRecord?>> {
+class ProcessPayrollNotifier extends AsyncNotifier<PayrollRecord?> {
   final PayrollRepository _repo;
-  ProcessPayrollNotifier(this._repo) : super(const AsyncData(null));
+
+  @override
+  Future<PayrollRecord?> build() async => null;
 
   Future<void> compute({
     required String employeeId,
@@ -239,5 +240,5 @@ Dashboard → /payroll → PayrollScreen
 
 ## Files to Modify
 
-- `lib/main.dart` — add `/payroll` and `/payroll/:id` routes
+- `lib/main.dart` — add `/payroll` route and `GoRoute(path: '/payroll/:id', ...) ` for detail screen using `state.pathParameters['id']`
 - `lib/src/ui/screens/dashboard_screen.dart` — wire Payroll button navigation
