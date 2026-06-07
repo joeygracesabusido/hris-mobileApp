@@ -300,24 +300,29 @@ class _QuickActionsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions = [
       _ActionItem(icon: Icons.fingerprint, label: 'Attendance', color: const Color(0xFF00D1B2)),
+      _ActionItem(icon: Icons.fingerprint, label: 'Face Registration', color: const Color(0xFF6C63FF)),
       _ActionItem(icon: Icons.person_add, label: 'Add Employee', color: const Color(0xFF00D1B2)),
       _ActionItem(icon: Icons.event, label: 'Manage Leaves', color: const Color(0xFF6C63FF)),
       _ActionItem(icon: Icons.attach_money, label: 'Payroll', color: const Color(0xFFFF6B6B)),
       _ActionItem(icon: Icons.schedule, label: 'Time Logs', color: const Color(0xFFFFD93D)),
     ];
 
-    return Row(
-      children: actions.map((action) {
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: action == actions.first ? 0 : 6,
-              right: action == actions.last ? 0 : 6,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: actions.map((action) {
+          return Expanded(
+            flex: 1,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: action == actions.first ? 0 : 6,
+                right: action == actions.last ? 0 : 6,
+              ),
+              child: _ActionButton(item: action),
             ),
-            child: _ActionButton(item: action),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -340,6 +345,8 @@ class _ActionButton extends StatelessWidget {
       context.go('/attendance');
     } else if (item.label == 'Time Logs') {
       context.go('/time-logs');
+    } else if (item.label == 'Face Registration') {
+      context.go('/face-status');
     }
   }
 

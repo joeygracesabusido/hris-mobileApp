@@ -10,6 +10,7 @@ import 'src/ui/screens/employee_list_screen.dart';
 import 'src/ui/screens/time_log_screen.dart';
 import 'src/ui/screens/attendance_screen.dart';
 import 'src/ui/screens/face_enroll_screen.dart';
+import 'src/ui/screens/face_status_screen.dart';
 import 'src/ui/widgets/app_theme.dart';
 
 void main() async {
@@ -79,6 +80,10 @@ class _AppWithRouter extends ConsumerWidget {
         GoRoute(
           path: '/face-enroll',
           builder: (context, state) => const FaceEnrollScreen(),
+        ),
+        GoRoute(
+          path: '/face-status',
+          builder: (context, state) => const FaceStatusScreen(),
         ),
       ],
     );
