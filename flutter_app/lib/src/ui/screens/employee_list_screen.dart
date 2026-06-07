@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/employee.dart';
 import '../../data/providers/employee_list_provider.dart';
+import '../../auth/auth_provider.dart';
+import '../../auth/role_guard.dart';
 import '../widgets/app_theme.dart';
 
 class EmployeeListScreen extends ConsumerWidget {
@@ -11,6 +13,8 @@ class EmployeeListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final employeeAsync = ref.watch(employeeListProvider);
+    // ignore: unused_local_variable
+    final guard = RoleGuard(ref.watch(authProvider));
 
     return Scaffold(
       appBar: AppBar(
