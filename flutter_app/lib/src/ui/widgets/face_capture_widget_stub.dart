@@ -6,7 +6,7 @@ class FaceCaptureWidget extends StatefulWidget {
   final FaceCaptureMode mode;
   final List<double>? storedDescriptor;
   final void Function(List<double> descriptor)? onCapture;
-  final void Function(bool isMatch, double distance)? onVerify;
+  final void Function(bool isMatch, double distance, List<double>? descriptor)? onVerify;
 
   const FaceCaptureWidget({
     super.key,

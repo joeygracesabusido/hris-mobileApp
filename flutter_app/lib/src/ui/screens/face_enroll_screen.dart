@@ -19,6 +19,30 @@ class _FaceEnrollScreenState extends ConsumerState<FaceEnrollScreen> {
   bool? _statusSuccess;
 
   Future<void> _handleCapture(List<double> descriptor) async {
+    // Validate descriptor quality before enrollment
+    if (descriptor.isEmpty || descriptor.any((d) => d.isNaN || d.isInfinite)) {
+      setState(() {
+        _statusMessage = 'Invalid face data detected. Please try again with better lighting.';
+        _statusSuccess = false;
+      });
+      return;
+    }
+    final sumSq = descriptor.fold(0.0, (sum, d) => sum + d * d);
+    if (sumSq < 1.0) {
+      setState(() {
+        _statusMessage = 'Face data quality too low. Please try again — center your face in good lighting.';
+        _statusSuccess = false;
+      });
+      return;
+    }
+    if (sumSq > 500) {
+      setState(() {
+        _statusMessage = 'Face data quality anomalous. Please try again.';
+        _statusSuccess = false;
+      });
+      return;
+    }
+
     setState(() {
       _statusMessage = 'Saving face data...';
       _statusSuccess = null;

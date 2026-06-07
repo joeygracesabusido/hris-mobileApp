@@ -195,6 +195,64 @@ flutter test
 - `flutter_app/android/app/build.gradle.kts` — added `aaptOptions { noCompress("tflite") }`
 - `flutter_app/lib/src/ui/widgets/face_capture_widget_mobile.dart` — replaced `Interpreter.fromAsset` with manual asset load + temp file + `Interpreter.fromFile`
 
+### 2026-06-07 — Server-side face verification + web FaceDetector interop fix + skin-tone fallback removal
+
+**Goal:** Replace on-device embedding comparison with server-side MongoDB face verification. Fix web FaceDetector interop that silently failed. Remove skin-tone fallback that allowed hand-bypass.
+
+**Done:**
+- **Backend:** Created `POST /api/face/verify` route — accepts `{ faceDescriptor: [128 floats] }`, compares Euclidean distance (< 0.6) against ALL employees' stored descriptors in MongoDB, returns `{ matched, employee, distance }`
+- **FaceRepository** (`face_repository.dart`): Added `FaceVerificationResult`, `FaceVerificationEmployee` models + `verifyFace(List<double> descriptor)` method
+- **FaceCaptureWidget** (all 3 platforms): `onVerify` callback signature updated to include `List<double>? descriptor` parameter
+- **AttendanceScreen**: Mobile path uses server-side `verifyFace()` — if no match, shows **"Face not registered in the system"** alert. Web path uses FaceDetector presence only (no embedding)
+- **Skin-tone fallback REMOVED** (`face_capture_widget_web.dart`): Previously, if FaceDetector API failed or returned no faces, the code fell back to a skin-color pixel check that could be triggered by a hand. Removed entirely — no more bypass.
+- **Web FaceDetector interop fixed:**
+  - Replaced `html.window as JSObject` (silent runtime cast failure in dartdevc) with `globalContext` from `dart:js_interop`
+  - Replaced HTMLImageElement + data URL (cross-library cast issue) with pure JS `Blob` from raw JPEG bytes via `Uint8List.toJS`
+  - Removed `dart:html` and `dart:convert` imports entirely
+- `flutter analyze` — **0 issues** ✅
+
+**Root cause of hand bypass:** The skin-tone fallback (`_hasSkinTone`) checked average pixel color in the red/brown range. A hand/fist in the frame has similar skin-tone RGB values to a face, so it passed the check. Removed because the proper browser FaceDetector API (fixed in this session) is the only valid face detection path on web.
+
+**Files created:**
+- `app/api/face/verify/route.ts` (backend — server-side face verification endpoint)
+
+**Files modified (Flutter):**
+- `lib/src/data/providers/face_repository.dart` — added `verifyFace()`, `FaceVerificationResult`, `FaceVerificationEmployee`
+- `lib/src/ui/widgets/face_capture_widget.dart` — `onVerify` signature updated with descriptor param
+- `lib/src/ui/widgets/face_capture_widget_mobile.dart` — passes descriptor through `onVerify`
+- `lib/src/ui/widgets/face_capture_widget_web.dart` — removed skin-tone fallback, fixed FaceDetector interop, removed `dart:html`/`dart:convert`, passes `null` descriptor
+- `lib/src/ui/widgets/face_capture_widget_stub.dart` — `onVerify` signature updated
+- `lib/src/ui/screens/attendance_screen.dart` — server-side face verification flow
+
+### 2026-06-07 (v2) — Face verification distance 1.6 on SM-A075F — descriptor validation + diagnostic logging
+
+**Problem:** Face verification on Samsung SM-A075F fails with Euclidean distance of ~1.64 (threshold: 0.6). Error shown: "Face not recognized (distance: 1.64)".
+
+**Root cause:** The enrolled face descriptor was captured **before** the stride fix on 2026-05-31. The old `_cameraImageToImg` used `width` instead of `bytesPerRow` for stride indexing, producing garbled pixel data → wrong embedding → stored in MongoDB. After the stride fix, the verification pipeline generates correct embeddings, but they don't match the garbled stored one (distance 1.64).
+
+**Diagnostic confirmation:** Added `debugPrint` that outputs first 5 values + sum-of-squares energy for both generated and stored descriptors. The energy check exposes garbled descriptors (energy typically < 1.0 for corrupted data vs. 50-200 for valid face embeddings).
+
+**Done:**
+
+**`face_capture_widget_mobile.dart`:**
+- Added `_validateDescriptor()` (line 575-591) — checks for empty, NaN/Infinity, all-zero, energy < 1.0 or > 500
+- `_runModel()` (line 417-447) — validates descriptor after TFLite inference before returning; logs first 5 values + descriptor length
+- `_processImage` verify branch (line 228-238) — diagnostic logging of descriptor energy and distance to debug console
+
+**`face_enroll_screen.dart`** (line 21-44):
+- Pre-enrollment validation — rejects descriptors with NaN, energy < 1.0 (quality too low), or energy > 500 (anomalous)
+- Shows specific error messages per failure mode to guide user (better lighting, center face)
+
+**`attendance_screen.dart`** (line 200-249):
+- After fetching stored descriptor from backend, validates: empty → "Please enroll", NaN/corrupted → "Please re-enroll", energy out of range → "poor quality, please re-enroll"
+- `on DioException` catches 404 separately ("not enrolled") vs network errors
+- Generic `catch` shows "unexpected error occurred"
+
+**Files modified (Flutter):**
+- `lib/src/ui/widgets/face_capture_widget_mobile.dart` — descriptor validation, diagnostic logging
+- `lib/src/ui/screens/face_enroll_screen.dart` — pre-enrollment descriptor quality check
+- `lib/src/ui/screens/attendance_screen.dart` — stored descriptor validation, error differentiation
+
 ## CI / lint
 
 - Lint rules via `package:flutter_lints/flutter.yaml` — no custom overrides.

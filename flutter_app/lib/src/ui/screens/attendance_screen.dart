@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -197,20 +198,126 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
 
       final descriptor = await _faceRepo.getFaceDescriptor(employeeId);
+
+      if (descriptor.isEmpty) {
+        setState(() {
+          _loadingDescriptor = false;
+          _faceError = 'No face data found. Please enroll your face first.';
+        });
+        return;
+      }
+
+      if (descriptor.any((d) => d.isNaN || d.isInfinite)) {
+        setState(() {
+          _loadingDescriptor = false;
+          _faceError = 'Stored face data is corrupted. Please re-enroll your face.';
+        });
+        return;
+      }
+
+      final storedSumSq = descriptor.fold(0.0, (sum, d) => sum + d * d);
+      if (storedSumSq < 1.0 || storedSumSq > 500) {
+        setState(() {
+          _loadingDescriptor = false;
+          _faceError = 'Stored face data has poor quality. Please re-enroll your face.';
+        });
+        return;
+      }
+
       setState(() {
         _storedDescriptor = descriptor;
         _loadingDescriptor = false;
         _showFaceVerify = true;
       });
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        setState(() {
+          _loadingDescriptor = false;
+          _faceError = 'Face not enrolled. Please enroll your face first.';
+        });
+      } else {
+        setState(() {
+          _loadingDescriptor = false;
+          _faceError = 'Network error. Please check your connection and try again.';
+        });
+      }
     } catch (e) {
       setState(() {
         _loadingDescriptor = false;
-        _faceError = 'Face not enrolled. Please enroll first.';
+        _faceError = 'An unexpected error occurred. Please try again.';
       });
     }
   }
 
-  Future<void> _handleFaceResult(bool isMatch, double distance) async {
+  Future<void> _handleFaceResult(
+    bool isMatch,
+    double distance,
+    List<double>? descriptor,
+  ) async {
+    // === Server-side face verification ===
+    // If a face descriptor is available (mobile), send it to the backend
+    // to verify the face is registered in MongoDB.
+    if (descriptor != null) {
+      try {
+        final result = await _faceRepo.verifyFace(descriptor);
+
+        if (!result.matched) {
+          setState(() => _failedAttempts++);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Face not registered in the system. '
+                'Please enroll your face first via the mobile app.',
+              ),
+              backgroundColor: Color(0xFFFF6B6B),
+              duration: Duration(seconds: 4),
+            ),
+          );
+
+          if (_failedAttempts >= 3) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Too many failed attempts. Contact HR.'),
+                backgroundColor: Color(0xFFFF6B6B),
+              ),
+            );
+          }
+          return;
+        }
+
+        // Face verified — use the matched employee's ID for clock in/out
+        _proceedWithAttendance(result.employee?.id);
+        return;
+      } catch (e) {
+        // Server verification failed (network error, etc.)
+        // Fall back to on-device comparison result
+        debugPrint('Server-side face verification failed: $e');
+        if (!isMatch) {
+          setState(() => _failedAttempts++);
+          if (_failedAttempts >= 3) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Too many failed attempts. Contact HR.'),
+                backgroundColor: Color(0xFFFF6B6B),
+              ),
+            );
+          }
+          return;
+        }
+        // On-device match passed but server unavailable — proceed anyway
+        _proceedWithAttendance(null);
+        return;
+      }
+    }
+
+    // === Web fallback (no descriptor available) ===
+    // The web platform cannot generate face embeddings (no TFLite).
+    // FaceDetector API confirmed a face is present, but we cannot verify
+    // the face is registered in MongoDB without an embedding.
+    // Proceed with face presence only.
     if (!isMatch) {
       setState(() => _failedAttempts++);
       if (_failedAttempts >= 3) {
@@ -225,9 +332,26 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       return;
     }
 
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Face detected. Note: Full identity verification '
+          'requires the mobile app.',
+        ),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 3),
+      ),
+    );
+    _proceedWithAttendance(null);
+  }
+
+  /// Proceeds with clock-in/out after successful face verification.
+  Future<void> _proceedWithAttendance(String? verifiedEmployeeId) async {
     try {
       final authState = ref.read(authProvider);
-      final employeeId = authState.user?['employeeId']?.toString() ??
+      final employeeId = verifiedEmployeeId ??
+          authState.user?['employeeId']?.toString() ??
           authState.user?['id']?.toString();
 
       if (employeeId == null) throw Exception('Employee ID not found');

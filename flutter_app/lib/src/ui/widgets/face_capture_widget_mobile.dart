@@ -16,7 +16,7 @@ class FaceCaptureWidget extends StatefulWidget {
   final FaceCaptureMode mode;
   final List<double>? storedDescriptor;
   final void Function(List<double> descriptor)? onCapture;
-  final void Function(bool isMatch, double distance)? onVerify;
+  final void Function(bool isMatch, double distance, List<double>? descriptor)? onVerify;
 
   const FaceCaptureWidget({
     super.key,
@@ -225,11 +225,20 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
         _setStatus('Face captured successfully!', true);
       } else if (widget.mode == FaceCaptureMode.verify &&
           widget.storedDescriptor != null) {
+        debugPrint('[FaceCapture] === FACE VERIFICATION ===');
+        debugPrint('[FaceCapture] Generated descriptor first 5: ${descriptor.take(5).toList()}');
+        debugPrint('[FaceCapture] Stored descriptor first 5: ${widget.storedDescriptor!.take(5).toList()}');
+        final genSumSq = descriptor.fold(0.0, (s, d) => s + d * d);
+        final storedSumSq = widget.storedDescriptor!.fold(0.0, (s, d) => s + d * d);
+        debugPrint('[FaceCapture] Generated descriptor energy: $genSumSq');
+        debugPrint('[FaceCapture] Stored descriptor energy: $storedSumSq');
+
         final distance =
             _euclideanDistance(descriptor, widget.storedDescriptor!);
+        debugPrint('[FaceCapture] Euclidean distance: $distance (threshold: 0.6)');
         final isMatch = distance < 0.6;
 
-        widget.onVerify?.call(isMatch, distance);
+        widget.onVerify?.call(isMatch, distance, descriptor);
         _setStatus(
           isMatch
               ? 'Identity verified! (${((1 - distance) * 100).toStringAsFixed(0)}%)'
@@ -419,7 +428,18 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
       final output = List.filled(outputSize, 0.0).reshape([1, outputSize]);
       _interpreter!.run(input, output);
 
-      return (output[0] as List<dynamic>).cast<double>();
+      final descriptor = (output[0] as List<dynamic>).cast<double>();
+
+      debugPrint('[FaceCapture] Model output first 5 values: ${descriptor.take(5).toList()}');
+      debugPrint('[FaceCapture] Descriptor length: ${descriptor.length}');
+
+      final validationError = _validateDescriptor(descriptor);
+      if (validationError != null) {
+        debugPrint('[FaceCapture] Descriptor validation failed: $validationError');
+        return null;
+      }
+
+      return descriptor;
     } catch (e) {
       debugPrint('TFLite error: $e');
       return null;
@@ -550,6 +570,24 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget>
       sum += (a[i] - b[i]) * (a[i] - b[i]);
     }
     return sqrt(sum);
+  }
+
+  String? _validateDescriptor(List<double> descriptor) {
+    if (descriptor.isEmpty) return 'Empty descriptor';
+    if (descriptor.any((d) => d.isNaN || d.isInfinite)) {
+      return 'Descriptor contains NaN or Infinity values';
+    }
+    if (descriptor.every((d) => d == 0.0)) {
+      return 'All-zero descriptor — model may have failed';
+    }
+    final sumSq = descriptor.fold(0.0, (sum, d) => sum + d * d);
+    if (sumSq < 1.0) {
+      return 'Descriptor energy too low ($sumSq) — garbled input';
+    }
+    if (sumSq > 500) {
+      return 'Descriptor energy too high ($sumSq) — anomalous output';
+    }
+    return null;
   }
 
   Future<void> _retry() async {
