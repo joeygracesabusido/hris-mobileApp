@@ -311,13 +311,13 @@ class _QuickActionsGrid extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: actions.map((action) {
-          return Expanded(
-            flex: 1,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: action == actions.first ? 0 : 6,
-                right: action == actions.last ? 0 : 6,
-              ),
+          return Padding(
+            padding: EdgeInsets.only(
+              left: action == actions.first ? 0 : 6,
+              right: action == actions.last ? 0 : 6,
+            ),
+            child: SizedBox(
+              width: 110,
               child: _ActionButton(item: action),
             ),
           );
