@@ -8,10 +8,10 @@
 │   └── src/
 │       ├── auth/                          # AuthNotifier + AuthState + authProvider
 │       ├── data/
-│       │   ├── models/                    # Freezed models: employee.dart, time_log.dart (+ .freezed.dart / .g.dart)
-│       │   └── providers/                 # ApiClient (Dio singleton), EmployeeRepository, TimeLogRepository, providers
+│       │   ├── models/                    # Freezed models: employee.dart, time_log.dart, payroll.dart (+ .freezed.dart / .g.dart)
+│       │   └── providers/                 # ApiClient (Dio singleton), EmployeeRepository, TimeLogRepository, PayrollRepository, providers
 │       └── ui/
-│           ├── screens/                   # dashboard_screen.dart, employee_list_screen.dart, time_log_screen.dart
+│           ├── screens/                   # dashboard_screen.dart, employee_list_screen.dart, time_log_screen.dart, payroll_screen.dart, payroll_detail_screen.dart
 │           └── widgets/                   # app_theme.dart
     ├── assets/images/                         # Must exist on disk (declared in pubspec.yaml); contains .gitkeep
     ├── .env                                   # Required at flutter_app root for flutter_dotenv
@@ -20,8 +20,8 @@
 
 ## State & routing
 
-- **Riverpod** (`flutter_riverpod`) — `NotifierProvider` for auth, `StateNotifierProvider` for employee list
-- **GoRouter** — routes: `/login`, `/dashboard`, `/employees`, `/time-logs`; redirect logic in `main.dart` guards auth state
+- **Riverpod** (`flutter_riverpod`) — `NotifierProvider` for auth, `StateNotifierProvider` for employee list, `FutureProvider.family.autoDispose` + `AsyncNotifierProvider.autoDispose` for payroll
+- **GoRouter** — routes: `/login`, `/dashboard`, `/employees`, `/time-logs`, `/payroll`, `/payroll/:id`; redirect logic in `main.dart` guards auth state
 - Auth persisted via `FlutterSecureStorage` (mobile) / `SharedPreferences` (web)
 
 ## Commands
@@ -252,6 +252,34 @@ flutter test
 - `lib/src/ui/widgets/face_capture_widget_mobile.dart` — descriptor validation, diagnostic logging
 - `lib/src/ui/screens/face_enroll_screen.dart` — pre-enrollment descriptor quality check
 - `lib/src/ui/screens/attendance_screen.dart` — stored descriptor validation, error differentiation
+
+### 2026-06-07 — Payroll feature with Riverpod 2.0
+
+**Goal:** Build a functional payroll screen displaying computed Philippine payroll data with full payslip detail view, using Riverpod 2.0 auto-dispose providers. Role-aware: admin sees all, employee sees own.
+
+**Done:**
+- Created `PayrollRecord` freezed model with all Philippine payroll fields (basic salary, OT, holiday pay, SSS, PhilHealth, Pag-IBIG, withholding tax, deductions, net pay)
+- Created `PayrollRepository` with `getPayrolls()` (GET /payroll, optional employeeId filter) and `computePayroll()` (POST /payroll)
+- Created Riverpod 2.0 providers: `payrollListProvider.family.autoDispose<List<PayrollRecord>, String?>` (null = fetch all for admin), `processPayrollProvider` as `AsyncNotifierProvider.autoDispose` for compute form state
+- Created `PayrollScreen` — list view with payslip cards (period, employee name, net pay, status badge), pull-to-refresh, empty state. Admin-only FAB triggers process payroll bottom sheet with date pickers and frequency selector
+- Created `PayrollDetailScreen` — full payslip breakdown: Employee info header, Earnings section (basic salary, OT, holiday pay, gross), Deductions section (SSS, PhilHealth, Pag-IBIG, tax, late/undertime, other), Net Pay with gradient banner
+- Wired `/payroll` and `/payroll/:id` routes in GoRouter + dashboard "Payroll" button navigation
+- `flutter analyze` — **0 issues** ✅, `build_runner` — clean ✅
+
+**Architecture:** Freezed model → Repository → Riverpod 2.0 `FutureProvider.family.autoDispose` for list + `AsyncNotifierProvider.autoDispose` for compute form → PayrollScreen (list) → PayrollDetailScreen (payslip). Role-aware via `RoleGuard`.
+
+**Files created:**
+- `flutter_app/lib/src/data/models/payroll.dart` (+ generated `.freezed.dart`, `.g.dart`)
+- `flutter_app/lib/src/data/providers/payroll_repository.dart`
+- `flutter_app/lib/src/data/providers/payroll_provider.dart`
+- `flutter_app/lib/src/ui/screens/payroll_screen.dart`
+- `flutter_app/lib/src/ui/screens/payroll_detail_screen.dart`
+
+**Files modified (Flutter):**
+- `lib/main.dart` — added `/payroll`, `/payroll/:id` routes + screen imports
+- `lib/src/ui/screens/dashboard_screen.dart` — wired Payroll button navigation in `_onTap`
+
+**Commits:** `044f895`, `90d2689`, `9656236`, `2c24266`, `13b876c`, `267df6d`
 
 ## CI / lint
 
