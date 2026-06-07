@@ -67,7 +67,7 @@ No new provider needed — each screen constructs a `RoleGuard` from the current
 Update `EmployeeListNotifier` to accept `AuthState` (same pattern as `TimeLogListNotifier`):
 
 - If admin: call `_repository.getAll()` → show all employees
-- If employee: call `_repository.getByEmployeeId(currentEmployeeId)` → show single card with own data
+- If employee: add `getByEmployeeId(employeeId)` to EmployeeRepository (same pattern as TimeLogRepository) → show single card with own data
 - Remove search bar from employee list screen when in employee mode (only 1 result)
 
 ### 4. Employee List Screen Changes
@@ -107,6 +107,7 @@ Each screen reads auth state, constructs a RoleGuard, and the provider uses it t
 
 ## Files to Modify
 
+- `lib/src/auth/employee_repository.dart` — add `getByEmployeeId(String employeeId)` method
+- `lib/src/data/providers/employee_list_provider.dart` — role-aware data fetching, accept AuthState
 - `lib/src/ui/screens/dashboard_screen.dart` — conditional rendering based on role
-- `lib/src/data/providers/employee_list_provider.dart` — role-aware data fetching
 - `lib/src/ui/screens/employee_list_screen.dart` — conditional search bar for employee mode
