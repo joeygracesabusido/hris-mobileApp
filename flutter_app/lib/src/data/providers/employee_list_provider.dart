@@ -2,38 +2,45 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hris_mobile/src/data/models/employee.dart';
 import 'package:hris_mobile/src/data/providers/employee_repository.dart';
+import '../../auth/auth_provider.dart';
+import '../../auth/role_guard.dart';
 
-/// A [StateNotifier] that loads the list of employees and exposes it as an
-/// [AsyncValue]. It supports refresh and basic error handling.
 class EmployeeListNotifier extends StateNotifier<AsyncValue<List<Employee>>> {
   final EmployeeRepository _repository;
+  final RoleGuard _guard;
 
-  EmployeeListNotifier(this._repository) : super(const AsyncLoading()) {
-    // Load on creation
+  EmployeeListNotifier(this._repository, this._guard) : super(const AsyncLoading()) {
     fetchEmployees();
   }
 
-  /// Fetches all employees from the backend.
   Future<void> fetchEmployees() async {
     try {
       state = const AsyncLoading();
-      final employees = await _repository.getAll();
+      List<Employee> employees = [];
+
+      if (_guard.isAdmin) {
+        employees = await _repository.getAll();
+      } else if (_guard.currentEmployeeId != null) {
+        employees = await _repository.getByEmployeeId(_guard.currentEmployeeId!);
+      }
+
       state = AsyncData(employees);
     } catch (e, st) {
       state = AsyncError(e, st);
     }
   }
 
-  /// Refreshes the list – useful for pull‑to‑refresh UI.
   Future<void> refresh() async => await fetchEmployees();
 }
 
-/// Provider for the repository – a single instance for the whole app.
 final employeeRepositoryProvider = Provider<EmployeeRepository>((ref) {
   return EmployeeRepository();
 });
 
-/// StateNotifierProvider exposing the employee list.
 final employeeListProvider = StateNotifierProvider<EmployeeListNotifier, AsyncValue<List<Employee>>>(
-  (ref) => EmployeeListNotifier(ref.watch(employeeRepositoryProvider)),
+  (ref) {
+    final repository = ref.watch(employeeRepositoryProvider);
+    final authState = ref.watch(authProvider);
+    return EmployeeListNotifier(repository, RoleGuard(authState));
+  },
 );
