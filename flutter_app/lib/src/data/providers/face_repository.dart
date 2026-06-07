@@ -100,7 +100,22 @@ class FaceRepository {
   }
 
   Future<FaceEnrollmentStatus> getEnrollmentStatus() async {
-    final response = await _dio.get('/face/status');
-    return FaceEnrollmentStatus.fromJson(response.data as Map<String, dynamic>);
+    try {
+      final response = await _dio.get('/face/status');
+      return FaceEnrollmentStatus.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final serverMsg = e.response?.data?['error'] as String?;
+      if (serverMsg != null) {
+        throw Exception('Server: $serverMsg');
+      }
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Connection timed out. Check your internet connection.');
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        throw Exception('Cannot reach server. Check your internet connection.');
+      }
+      throw Exception('Failed to check enrollment status (${e.message ?? e.type.toString()})');
+    }
   }
 }
