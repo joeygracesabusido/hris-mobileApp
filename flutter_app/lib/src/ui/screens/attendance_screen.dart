@@ -395,7 +395,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         _isClockingOut = false;
       });
 
-      ref.read(timeLogListProvider.notifier).refresh();
+      ref.invalidate(timeLogListProvider(employeeId));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

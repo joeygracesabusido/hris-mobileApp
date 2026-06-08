@@ -106,7 +106,14 @@ class _PayrollCard extends StatelessWidget {
   final PayrollRecord record;
   const _PayrollCard({required this.record});
 
-  String _formatPeriod(DateTime dt) => DateFormat('MMM yyyy').format(dt);
+  String _formatMonthYear(int month, int year) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[month - 1]} $year';
+  }
+
   String _formatCurrency(double amount) =>
       NumberFormat.currency(symbol: '₱', decimalDigits: 2).format(amount);
 
@@ -135,7 +142,7 @@ class _PayrollCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                    _formatPeriod(record.periodStart),
+                    _formatMonthYear(record.month, record.year),
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

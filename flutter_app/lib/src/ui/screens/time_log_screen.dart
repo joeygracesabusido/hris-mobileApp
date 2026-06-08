@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../auth/auth_provider.dart';
+import '../../auth/role_guard.dart';
 import '../../data/models/time_log.dart';
 import '../../data/providers/time_log_list_provider.dart';
-import '../../auth/auth_provider.dart';
 import '../widgets/app_theme.dart';
 
 class TimeLogScreen extends ConsumerStatefulWidget {
@@ -37,7 +38,9 @@ class _TimeLogScreenState extends ConsumerState<TimeLogScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-    final timeLogAsync = ref.watch(timeLogListProvider);
+    final guard = RoleGuard(authState);
+    final employeeId = guard.isAdmin ? null : guard.currentEmployeeId;
+    final timeLogAsync = ref.watch(timeLogListProvider(employeeId));
 
     if (!authState.isAuthenticated) {
       return Scaffold(
@@ -75,11 +78,30 @@ class _TimeLogScreenState extends ConsumerState<TimeLogScreen> {
       backgroundColor: AppTheme.background,
       body: timeLogAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 12),
+              Text('$err',
+                  style: const TextStyle(color: AppTheme.textSecondary)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () =>
+                    ref.invalidate(timeLogListProvider(employeeId)),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
         data: (logs) {
           final filtered = _filterLogs(logs);
           return RefreshIndicator(
-            onRefresh: () => ref.read(timeLogListProvider.notifier).refresh(),
+            onRefresh: () async {
+              ref.invalidate(timeLogListProvider(employeeId));
+              await ref.read(timeLogListProvider(employeeId).future);
+            },
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
